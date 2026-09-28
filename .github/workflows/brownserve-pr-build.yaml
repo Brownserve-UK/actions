@@ -1,0 +1,105 @@
+---
+name: brownserve-pr-build
+on:
+  workflow_call:
+    inputs:
+      repo-name:
+        description: The GitHub repo name, also used as the checkout path.
+        required: true
+        type: string
+      change-pattern:
+        description: An extended regular expression matched against changed file paths to decide whether to build.
+        required: true
+        type: string
+      build-task:
+        description: The Invoke-Build task to run.
+        required: false
+        type: string
+        default: BuildTestAndCheck
+      os-matrix:
+        description: A JSON array of runner labels to build on, e.g. '["ubuntu-latest"]' or '["ubuntu-latest", "macos-latest", "windows-latest"]'.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      rust:
+        description: Whether the build needs the Rust toolchain.
+        required: false
+        type: boolean
+        default: false
+      node:
+        description: Whether the build needs Node.js (e.g. to build an Astro/MkDocs site).
+        required: false
+        type: boolean
+        default: false
+      mono:
+        description: Whether the build needs Mono.
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - name: check-relevant-changes
+        id: filter
+        uses: Brownserve-UK/actions/detect-changes@v0.1.0
+        with:
+          pattern: ${{ inputs.change-pattern }}
+          pr-number: ${{ github.event.pull_request.number }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+
+  build:
+    needs: check-changes
+    if: needs.check-changes.outputs.relevant == 'true'
+    strategy:
+      matrix:
+        os: ${{ fromJSON(inputs.os-matrix) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      # Step 1: Install any toolchains the build needs
+      - name: setup-toolchains
+        uses: Brownserve-UK/actions/setup-toolchains@v0.1.0
+        with:
+          rust: ${{ inputs.rust }}
+          node: ${{ inputs.node }}
+          mono: ${{ inputs.mono }}
+      # Step 2: Checkout the repo and run the build script
+      - name: run-build
+        uses: Brownserve-UK/actions/run-build@v0.1.0
+        with:
+          repo-name: ${{ inputs.repo-name }}
+          build: ${{ inputs.build-task }}
+
+  # Gate job: always runs (even when 'build' was skipped) and reports the single status check name that
+  # branch protection requires. This keeps the required-check name stable whether or not relevant changes
+  # are present.
+  BuildTestAndCheck:
+    needs: [check-changes, build]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: evaluate-build-result
+        env:
+          CHECK_CHANGES_RESULT: ${{ needs.check-changes.result }}
+          CHECK_CHANGES_RELEVANT: ${{ needs.check-changes.outputs.relevant }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          if [ "$CHECK_CHANGES_RESULT" != "success" ]; then
+            echo "check-changes did not succeed (result: $CHECK_CHANGES_RESULT)"
+            exit 1
+          fi
+          if [ "$CHECK_CHANGES_RELEVANT" == "true" ] && [ "$BUILD_RESULT" != "success" ]; then
+            echo "Build did not succeed (result: $BUILD_RESULT)"
+            exit 1
+          fi
+          echo "All required jobs succeeded (or were correctly skipped)"
+          exit 0

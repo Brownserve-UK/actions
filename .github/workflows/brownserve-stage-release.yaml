@@ -1,0 +1,54 @@
+---
+name: brownserve-stage-release
+on:
+  workflow_call:
+    inputs:
+      repo-name:
+        description: The GitHub repo name, also used as the checkout path.
+        required: true
+        type: string
+      release-type:
+        description: The type of release to perform (major, minor or patch).
+        required: true
+        type: string
+      rust:
+        description: Whether staging needs the Rust toolchain (needed by UpdateCargoVersion to regenerate Cargo.lock).
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      app-id:
+        description: The GitHub App ID used to generate a short-lived token for staging the release.
+        required: true
+      app-private-key:
+        description: The GitHub App private key used to generate a short-lived token for staging the release.
+        required: true
+
+jobs:
+  stage-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Step 1: Generate a short-lived token from the GitHub App
+      - name: generate-app-token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+      # Step 2: Install Rust (needed by UpdateCargoVersion to regenerate Cargo.lock)
+      - name: setup-toolchains
+        uses: Brownserve-UK/actions/setup-toolchains@v0.1.0
+        with:
+          rust: ${{ inputs.rust }}
+      # Step 3: Checkout the repo and run the build script
+      - name: run-build
+        uses: Brownserve-UK/actions/run-build@v0.1.0
+        with:
+          repo-name: ${{ inputs.repo-name }}
+          checkout-token: ${{ steps.app-token.outputs.token }}
+          # We need to fetch the full history so that we can determine the changelog entries from the previous release
+          fetch-depth: '0'
+          build: StageRelease
+          release-type: ${{ inputs.release-type }}
+          github-stage-release-token: ${{ steps.app-token.outputs.token }}

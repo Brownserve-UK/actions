@@ -1,0 +1,133 @@
+---
+name: brownserve-release
+on:
+  workflow_call:
+    inputs:
+      repo-name:
+        description: The GitHub repo name, also used as the checkout path.
+        required: true
+        type: string
+      publish-to:
+        description: Where to publish the release to, e.g. '"nuget", "PSGallery", "GitHub"'.
+        required: true
+        type: string
+      package-matrix:
+        description: Optional JSON array of package job includes, each with an 'os' and a 'target', built before the release job. Leave empty to skip packaging.
+        required: false
+        type: string
+        default: ''
+      package-build-task:
+        description: The build the package matrix jobs run.
+        required: false
+        type: string
+        default: Package
+      mono:
+        description: Whether the release needs Mono (required to run NuGet.exe on Linux).
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      app-id:
+        description: The GitHub App ID used to generate a short-lived token for the release.
+        required: true
+      app-private-key:
+        description: The GitHub App private key used to generate a short-lived token for the release.
+        required: true
+      nuget-api-key:
+        description: nuget.org API key, required when 'nuget' is in publish-to.
+        required: false
+      psgallery-api-key:
+        description: PowerShell Gallery API key, required when 'PSGallery' is in publish-to.
+        required: false
+      dockerhub-username:
+        description: DockerHub username, required when 'DockerHub' is in publish-to.
+        required: false
+      dockerhub-token:
+        description: DockerHub token, required when 'DockerHub' is in publish-to.
+        required: false
+      slack-webhook:
+        description: Slack incoming webhook used to notify on the release result.
+        required: true
+
+jobs:
+  # Build a native binary on each target platform and upload it as a workflow artifact
+  package:
+    if: inputs.package-matrix != ''
+    strategy:
+      matrix:
+        include: ${{ fromJSON(inputs.package-matrix || '[]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      # Step 1: Checkout the repo and build and archive the binary for this platform
+      - name: run-build
+        uses: Brownserve-UK/actions/run-build@v0.1.0
+        with:
+          repo-name: ${{ inputs.repo-name }}
+          build: ${{ inputs.package-build-task }}
+          target: ${{ matrix.target }}
+      # Step 2: Upload the archive so the release job can collect it
+      - name: upload-artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: ${{ inputs.repo-name }}/.tmp/output/
+          if-no-files-found: error
+
+  # Collect any archives and publish the release
+  release:
+    needs: [package]
+    if: ${{ !cancelled() && (needs.package.result == 'success' || needs.package.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # Step 1: Generate a short-lived token from the GitHub App
+      - name: generate-app-token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+      # Step 2: Install Mono (required to run NuGet.exe on Linux)
+      - name: setup-toolchains
+        uses: Brownserve-UK/actions/setup-toolchains@v0.1.0
+        with:
+          mono: ${{ inputs.mono }}
+      # Step 3: Download all platform archives into a staging directory outside the repo tree.
+      # They are copied into .tmp/output by build.ps1 after _init.ps1 recreates ephemeral directories.
+      - name: download-artifacts
+        if: inputs.package-matrix != ''
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        with:
+          pattern: binary-*
+          path: ${{ runner.temp }}/release-archives
+          merge-multiple: true
+      # Step 4: Checkout the repo and run the release script
+      - name: run-build
+        uses: Brownserve-UK/actions/run-build@v0.1.0
+        with:
+          repo-name: ${{ inputs.repo-name }}
+          build: Release
+          publish-to: ${{ inputs.publish-to }}
+          github-release-token: ${{ steps.app-token.outputs.token }}
+          nuget-feed-api-key: ${{ secrets.nuget-api-key }}
+          psgallery-api-key: ${{ secrets.psgallery-api-key }}
+          dockerhub-username: ${{ secrets.dockerhub-username }}
+          dockerhub-token: ${{ secrets.dockerhub-token }}
+          ghcr-token: ${{ contains(inputs.publish-to, 'GHCR') && github.token || '' }}
+          archive-source-directory: ${{ inputs.package-matrix != '' && format('{0}/release-archives', runner.temp) || '' }}
+      # Step 5: Push a notification to Slack
+      - name: notify
+        if: ${{ always() }}
+        uses: Brownserve-UK/actions/notify@v0.1.0
+        with:
+          repo-path: ${{ inputs.repo-name }}
+          webhook: ${{ secrets.slack-webhook }}
+          build-name: ${{ github.job }}
+          build-status: ${{ job.status }}
+          repo-branch: ${{ github.ref }}
