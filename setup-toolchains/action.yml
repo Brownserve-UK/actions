@@ -1,0 +1,39 @@
+---
+name: setup-toolchains
+description: Installs the Rust, Node.js and/or Mono toolchains used by Brownserve build scripts, exactly as the generated per-repo workflows do.
+inputs:
+  rust:
+    description: Whether to install the stable Rust toolchain via rustup.
+    required: false
+    default: 'false'
+  node:
+    description: Whether to install Node.js via actions/setup-node.
+    required: false
+    default: 'false'
+  node-version:
+    description: The Node.js version to install when 'node' is true.
+    required: false
+    default: '22'
+  mono:
+    description: Whether to install Mono (required to run NuGet.exe on Linux).
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    # Step 1: Install Rust
+    - name: install-rust
+      if: inputs.rust == 'true'
+      shell: bash
+      run: rustup toolchain install stable --profile minimal
+    # Step 2: Install Node.js
+    - name: setup-node
+      if: inputs.node == 'true'
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: ${{ inputs.node-version }}
+    # Step 3: Install Mono (required to run NuGet.exe on Linux)
+    - name: install-mono
+      if: inputs.mono == 'true'
+      shell: bash
+      run: sudo apt-get install -y mono-complete

@@ -1,0 +1,17 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        Brownserve-UK/actions/*: ref-pin
+        "*": hash-pin
+  artipacked:
+    disable: true
+  github-app:
+    disable: true
+  dangerous-triggers:
+    disable: true
+  ref-version-mismatch:
+    disable: true
+  template-injection:
+    ignore:
+      - release.yaml

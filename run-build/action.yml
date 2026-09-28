@@ -1,0 +1,119 @@
+---
+name: run-build
+description: Checks out a Brownserve repository at the '<repo-name>' path convention and calls its '.build/build.ps1', exactly as the generated per-repo workflows do.
+inputs:
+  repo-name:
+    description: The GitHub repo name, also used as the checkout path.
+    required: true
+  checkout-token:
+    description: The token to use when checking out the repo.
+    required: false
+    default: ${{ github.token }}
+  fetch-depth:
+    description: Number of commits to fetch. 0 fetches all history, needed when the build reads the changelog.
+    required: false
+    default: '1'
+  branch-name:
+    description: The branch this is being built from.
+    required: false
+    default: ${{ github.ref }}
+  build:
+    description: The build to run, e.g. BuildTestAndCheck, StageRelease, Package or Release.
+    required: true
+  release-type:
+    description: The type of changes in this release (major, minor or patch).
+    required: false
+  publish-to:
+    description: Where to publish the release to, in the same format as the release workflow input, e.g. '"nuget", "PSGallery", "GitHub"'.
+    required: false
+  github-repo-owner:
+    description: The GitHub organisation/account that owns this repo. Uses the build script's default when not set.
+    required: false
+  github-stage-release-token:
+    description: GitHub token used during the StageRelease build.
+    required: false
+  github-release-token:
+    description: GitHub token used during the Release build.
+    required: false
+  nuget-feed-api-key:
+    description: The API key for the NuGet feed.
+    required: false
+  psgallery-api-key:
+    description: The API key for the PowerShell Gallery.
+    required: false
+  dockerhub-username:
+    description: The DockerHub username.
+    required: false
+  dockerhub-token:
+    description: The DockerHub token.
+    required: false
+  ghcr-token:
+    description: The token used to push to GHCR.
+    required: false
+  target:
+    description: The target to package for.
+    required: false
+  archive-source-directory:
+    description: The directory holding pre-built archives to include in the release.
+    required: false
+runs:
+  using: composite
+  steps:
+    # Step 1: Checkout the repo
+    - name: checkout-repo
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        path: ${{ inputs.repo-name }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        token: ${{ inputs.checkout-token }}
+    # Step 2: Run the build script
+    - name: run-build-script
+      shell: pwsh
+      env:
+        INPUT_REPO_NAME: ${{ inputs.repo-name }}
+        INPUT_BRANCH_NAME: ${{ inputs.branch-name }}
+        INPUT_BUILD: ${{ inputs.build }}
+        INPUT_RELEASE_TYPE: ${{ inputs.release-type }}
+        INPUT_PUBLISH_TO: ${{ inputs.publish-to }}
+        INPUT_GITHUB_REPO_OWNER: ${{ inputs.github-repo-owner }}
+        INPUT_GITHUB_STAGE_RELEASE_TOKEN: ${{ inputs.github-stage-release-token }}
+        INPUT_GITHUB_RELEASE_TOKEN: ${{ inputs.github-release-token }}
+        INPUT_NUGET_FEED_API_KEY: ${{ inputs.nuget-feed-api-key }}
+        INPUT_PSGALLERY_API_KEY: ${{ inputs.psgallery-api-key }}
+        INPUT_DOCKERHUB_USERNAME: ${{ inputs.dockerhub-username }}
+        INPUT_DOCKERHUB_TOKEN: ${{ inputs.dockerhub-token }}
+        INPUT_GHCR_TOKEN: ${{ inputs.ghcr-token }}
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_ARCHIVE_SOURCE_DIRECTORY: ${{ inputs.archive-source-directory }}
+      run: |
+        $Params = @{
+          GitHubRepoName = $env:INPUT_REPO_NAME
+          BranchName = $env:INPUT_BRANCH_NAME
+          Build = $env:INPUT_BUILD
+          Verbose = $true
+        }
+        $OptionalParams = [ordered]@{
+          ReleaseType = $env:INPUT_RELEASE_TYPE
+          GitHubRepoOwner = $env:INPUT_GITHUB_REPO_OWNER
+          GitHubStageReleaseToken = $env:INPUT_GITHUB_STAGE_RELEASE_TOKEN
+          GitHubReleaseToken = $env:INPUT_GITHUB_RELEASE_TOKEN
+          NugetFeedApiKey = $env:INPUT_NUGET_FEED_API_KEY
+          PSGalleryAPIKey = $env:INPUT_PSGALLERY_API_KEY
+          DockerHubUsername = $env:INPUT_DOCKERHUB_USERNAME
+          DockerHubToken = $env:INPUT_DOCKERHUB_TOKEN
+          GHCRToken = $env:INPUT_GHCR_TOKEN
+          Target = $env:INPUT_TARGET
+          ArchiveSourceDirectory = $env:INPUT_ARCHIVE_SOURCE_DIRECTORY
+        }
+        foreach ($Param in $OptionalParams.GetEnumerator())
+        {
+          if ($Param.Value)
+          {
+            $Params.Add($Param.Key, $Param.Value)
+          }
+        }
+        if ($env:INPUT_PUBLISH_TO)
+        {
+          $Params.Add('PublishTo', @($env:INPUT_PUBLISH_TO -split ',' | ForEach-Object { $_.Trim().Trim('"', "'") } | Where-Object { $_ }))
+        }
+        & "./$($env:INPUT_REPO_NAME)/.build/build.ps1" @Params

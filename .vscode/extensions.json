@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "streetsidesoftware.code-spell-checker",
+    "ms-vscode.powershell",
+    "EditorConfig.EditorConfig",
+    "DavidAnson.vscode-markdownlint"
+  ]
+}
