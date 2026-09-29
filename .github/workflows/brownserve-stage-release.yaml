@@ -37,18 +37,56 @@ jobs:
           app-id: ${{ secrets.app-id }}
           private-key: ${{ secrets.app-private-key }}
       # Step 2: Install Rust (needed by UpdateCargoVersion to regenerate Cargo.lock)
-      - name: setup-toolchains
-        uses: Brownserve-UK/actions/setup-toolchains@v0.1.0
+      - name: install-rust
+        if: inputs.rust
+        shell: bash
+        run: rustup toolchain install stable --profile minimal
+      # Step 3: Checkout the repo
+      - name: checkout-repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          rust: ${{ inputs.rust }}
-      # Step 3: Checkout the repo and run the build script
-      - name: run-build
-        uses: Brownserve-UK/actions/run-build@v0.1.0
-        with:
-          repo-name: ${{ inputs.repo-name }}
-          checkout-token: ${{ steps.app-token.outputs.token }}
+          path: ${{ inputs.repo-name }}
           # We need to fetch the full history so that we can determine the changelog entries from the previous release
           fetch-depth: '0'
-          build: StageRelease
-          release-type: ${{ inputs.release-type }}
-          github-stage-release-token: ${{ steps.app-token.outputs.token }}
+          token: ${{ steps.app-token.outputs.token }}
+      # Step 4: Run the build script
+      - name: run-build-script
+        shell: pwsh
+        env:
+          INPUT_REPO_NAME: ${{ inputs.repo-name }}
+          INPUT_BRANCH_NAME: ${{ github.ref }}
+          INPUT_BUILD: StageRelease
+          INPUT_RELEASE_TYPE: ${{ inputs.release-type }}
+          INPUT_GITHUB_STAGE_RELEASE_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          $Params = @{
+            GitHubRepoName = $env:INPUT_REPO_NAME
+            BranchName = $env:INPUT_BRANCH_NAME
+            Build = $env:INPUT_BUILD
+            Verbose = $true
+          }
+          $OptionalParams = [ordered]@{
+            ReleaseType = $env:INPUT_RELEASE_TYPE
+            GitHubRepoOwner = $env:INPUT_GITHUB_REPO_OWNER
+            GitHubStageReleaseToken = $env:INPUT_GITHUB_STAGE_RELEASE_TOKEN
+            GitHubReleaseToken = $env:INPUT_GITHUB_RELEASE_TOKEN
+            NugetFeedApiKey = $env:INPUT_NUGET_FEED_API_KEY
+            PSGalleryAPIKey = $env:INPUT_PSGALLERY_API_KEY
+            DockerHubUsername = $env:INPUT_DOCKERHUB_USERNAME
+            DockerHubToken = $env:INPUT_DOCKERHUB_TOKEN
+            GHCRToken = $env:INPUT_GHCR_TOKEN
+            Target = $env:INPUT_TARGET
+            ArchiveSourceDirectory = $env:INPUT_ARCHIVE_SOURCE_DIRECTORY
+          }
+          foreach ($Param in $OptionalParams.GetEnumerator())
+          {
+            if ($Param.Value)
+            {
+              $Params.Add($Param.Key, $Param.Value)
+            }
+          }
+          if ($env:INPUT_PUBLISH_TO)
+          {
+            $Params.Add('PublishTo', @($env:INPUT_PUBLISH_TO -split ',' | ForEach-Object { $_.Trim().Trim('"', "'") } | Where-Object { $_ }))
+          }
+          & "./$($env:INPUT_REPO_NAME)/.build/build.ps1" @Params

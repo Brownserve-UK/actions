@@ -4,11 +4,10 @@ Pull requests are welcome. Please read this guide before submitting.
 
 ## Repository conventions
 
-- Composite actions live in their own top-level directory, named after the action, with an `action.yml`.
 - Reusable workflows live in `.github/workflows/`, named `brownserve-<name>.yaml`, and declare their inputs, secrets
   and outputs explicitly.
-- Internal references to this repository's own actions/workflows use the full
-  `Brownserve-UK/actions/<path>@vX.Y.Z` form so that consumers always pin an exact release.
+- Reusable workflows never reference this repository's own actions or workflows. A shared step is copied into each
+  workflow that needs it and must stay identical (`env` aside), which a test enforces.
 
 ## Running the checks locally
 
@@ -16,8 +15,8 @@ Pull requests are welcome. Please read this guide before submitting.
 pwsh ./.build/build.ps1 -Build BuildTestAndCheck
 ```
 
-This runs the Pester tests under `.build/tests/`, plus `actionlint` against every action and workflow
-in the repository.
+This runs the Pester tests under `.build/tests/`, plus `actionlint` against every workflow in the
+repository.
 
 ## Commit and PR requirements
 
