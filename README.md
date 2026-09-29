@@ -5,7 +5,7 @@ Shared composite actions and reusable GitHub Actions workflows for Brownserve re
 This repository follows the same conventions as every other Brownserve repository (see
 [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md)): Paket for dependencies, an `Invoke-Build`
 based build under `.build/`, and the standard `StageRelease`/`Release` flow. Its own linting
-(`actionlint`, `zizmor`) and internal reference bumping are implemented as Invoke-Build tasks, not
+(`actionlint`) and internal reference bumping are implemented as Invoke-Build tasks, not
 scripts, so they run the same way locally and in CI.
 
 ## Composite actions
@@ -109,16 +109,16 @@ token, not the caller's `GITHUB_TOKEN`).
 ### `brownserve-release.yaml`
 
 Inputs: `repo-name`, `publish-to`, `package-matrix` (optional JSON array of package job includes,
-each with an `os` and a `target`), `package-build-task` (default `Package`), `mono` (boolean).
+each with an `os` and a `target`), `package-build-task` (default `Package`), `node`, `mono`
+(booleans).
 
 Secrets: `app-id`, `app-private-key`, `slack-webhook` (required); `nuget-api-key`,
 `psgallery-api-key`, `dockerhub-username`, `dockerhub-token` (only needed for the matching
 `publish-to` targets). The GHCR push uses the job's own `GITHUB_TOKEN`, passed only when
 `publish-to` includes `GHCR`.
 
-Caller permissions: `contents: read` and `packages: write`. The release job always requests
-`packages: write` because job permissions can't depend on inputs, and a called workflow fails to
-start if it requests more than the caller grants.
+Caller permissions: `contents: read`, plus `packages: write` when `publish-to` includes `GHCR`. The
+release job declares no permissions of its own, so it uses whatever the calling job grants.
 
 ### `brownserve-deploy-docs.yaml`
 

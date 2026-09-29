@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       publish-to:
-        description: Where to publish the release to, e.g. '"nuget", "PSGallery", "GitHub"'.
+        description: "Where to publish the release to, e.g. '\"nuget\", \"PSGallery\", \"GitHub\"'. The calling job must grant 'contents: read', plus 'packages: write' when 'GHCR' is included."
         required: true
         type: string
       package-matrix:
@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: Package
+      node:
+        description: Whether the release needs Node.js (e.g. to build an Astro documentation site).
+        required: false
+        type: boolean
+        default: false
       mono:
         description: Whether the release needs Mono (required to run NuGet.exe on Linux).
         required: false
@@ -82,9 +87,6 @@ jobs:
     if: ${{ !cancelled() && (needs.package.result == 'success' || needs.package.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    permissions:
-      contents: read
-      packages: write
     steps:
       # Step 1: Generate a short-lived token from the GitHub App
       - name: generate-app-token
@@ -93,10 +95,11 @@ jobs:
         with:
           app-id: ${{ secrets.app-id }}
           private-key: ${{ secrets.app-private-key }}
-      # Step 2: Install Mono (required to run NuGet.exe on Linux)
+      # Step 2: Install Node.js and Mono if required (Mono is needed to run NuGet.exe on Linux)
       - name: setup-toolchains
         uses: Brownserve-UK/actions/setup-toolchains@v0.1.0
         with:
+          node: ${{ inputs.node }}
           mono: ${{ inputs.mono }}
       # Step 3: Download all platform archives into a staging directory outside the repo tree.
       # They are copied into .tmp/output by build.ps1 after _init.ps1 recreates ephemeral directories.

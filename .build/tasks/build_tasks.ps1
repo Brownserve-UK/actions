@@ -383,27 +383,9 @@ task Lint {
 
 <#
 .SYNOPSIS
-    Runs zizmor against every workflow and composite action in the repository.
+    Runs the linter that checks every action.yml and workflow in the repository.
 #>
-task Zizmor {
-    Write-Build White 'Running zizmor'
-    $ZizmorPath = Join-Path $Global:BrownserveRepoBinaryDirectory ($IsWindows ? 'zizmor.exe' : 'zizmor')
-    Push-Location $Global:BrownserveRepoRootDirectory
-    try
-    {
-        exec { & $ZizmorPath '.' }
-    }
-    finally
-    {
-        Pop-Location
-    }
-}
-
-<#
-.SYNOPSIS
-    Runs the linters that check every action.yml and workflow in the repository.
-#>
-task Build Lint, Zizmor, {}
+task Build Lint, {}
 
 <#
 .SYNOPSIS

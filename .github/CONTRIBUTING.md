@@ -16,8 +16,8 @@ Pull requests are welcome. Please read this guide before submitting.
 pwsh ./.build/build.ps1 -Build BuildTestAndCheck
 ```
 
-This runs the Pester tests under `.build/tests/`, plus `actionlint` and `zizmor` against every action and
-workflow in the repository.
+This runs the Pester tests under `.build/tests/`, plus `actionlint` against every action and workflow
+in the repository.
 
 ## Commit and PR requirements
 
