@@ -207,7 +207,6 @@ catch
 ### Start user defined _init steps
 
 $ActionlintVersion = '1.7.12'
-$ZizmorVersion = '1.30.1'
 
 $ActionlintChecksums = @{
     'linux_amd64'   = '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
@@ -223,9 +222,6 @@ if ($IsWindows)
     $Arch = 'amd64'
     $ActionlintArchiveExtension = 'zip'
     $ActionlintBinaryName = 'actionlint.exe'
-    $ZizmorAssetName = 'zizmor-x86_64-pc-windows-msvc.zip'
-    $ZizmorArchiveExtension = 'zip'
-    $ZizmorBinaryName = 'zizmor.exe'
 }
 elseif ($IsMacOS)
 {
@@ -233,9 +229,6 @@ elseif ($IsMacOS)
     $Arch = if ($(uname -m) -eq 'arm64') { 'arm64' } else { 'amd64' }
     $ActionlintArchiveExtension = 'tar.gz'
     $ActionlintBinaryName = 'actionlint'
-    $ZizmorAssetName = if ($Arch -eq 'arm64') { 'zizmor-aarch64-apple-darwin.tar.gz' } else { 'zizmor-x86_64-apple-darwin.tar.gz' }
-    $ZizmorArchiveExtension = 'tar.gz'
-    $ZizmorBinaryName = 'zizmor'
 }
 else
 {
@@ -243,9 +236,6 @@ else
     $Arch = 'amd64'
     $ActionlintArchiveExtension = 'tar.gz'
     $ActionlintBinaryName = 'actionlint'
-    $ZizmorAssetName = 'zizmor-x86_64-unknown-linux-gnu.tar.gz'
-    $ZizmorArchiveExtension = 'tar.gz'
-    $ZizmorBinaryName = 'zizmor'
 }
 
 $ActionlintAssetName = "actionlint_${ActionlintVersion}_${Platform}_${Arch}.$ActionlintArchiveExtension"
@@ -274,25 +264,6 @@ else
 if (!$IsWindows)
 {
     chmod +x (Join-Path $Global:BrownserveRepoBinaryDirectory $ActionlintBinaryName)
-}
-
-$ZizmorArchivePath = Join-Path $Global:BrownserveRepoTempDirectory $ZizmorAssetName
-$ZizmorDownloadUri = "https://github.com/zizmorcore/zizmor/releases/download/v$ZizmorVersion/$ZizmorAssetName"
-
-Write-Verbose "Downloading zizmor v$ZizmorVersion"
-Invoke-WebRequest -Uri $ZizmorDownloadUri -OutFile $ZizmorArchivePath -ErrorAction 'Stop'
-
-if ($ZizmorArchiveExtension -eq 'zip')
-{
-    Expand-Archive -Path $ZizmorArchivePath -DestinationPath $Global:BrownserveRepoBinaryDirectory -Force -ErrorAction 'Stop'
-}
-else
-{
-    tar -xzf $ZizmorArchivePath -C $Global:BrownserveRepoBinaryDirectory $ZizmorBinaryName
-}
-if (!$IsWindows)
-{
-    chmod +x (Join-Path $Global:BrownserveRepoBinaryDirectory $ZizmorBinaryName)
 }
 
 ### End user defined _init steps
