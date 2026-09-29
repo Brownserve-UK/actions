@@ -182,45 +182,6 @@ task SetVersion GetReleaseHistory, {
 
 <#
 .SYNOPSIS
-    Rewrites every internal 'Brownserve-UK/actions/<path>@vX.Y.Z' reference in the repository to the new version.
-.DESCRIPTION
-    Scans every file under the repository (excluding ephemeral/dependency directories) for references to this
-    repository's own actions/workflows and rewrites the version tag to the version being staged, so the release
-    commit carries them. Files it changes are added to the set of tracked files that get committed to the
-    staging branch alongside CHANGELOG.md.
-#>
-task UpdateActionReferences SetVersion, {
-    Write-Build White 'Updating internal action/workflow references'
-    $ExcludedDirectories = @('.git', '.tmp', 'packages', 'paket-files', 'node_modules')
-    $ReferencePattern = 'Brownserve-UK/actions/([^@''"\s]+)@v\d+\.\d+\.\d+'
-    $Files = Get-ChildItem -Path $Global:BrownserveRepoRootDirectory -Recurse -File -Force |
-        Where-Object {
-            $RelativePath = [System.IO.Path]::GetRelativePath($Global:BrownserveRepoRootDirectory, $_.FullName)
-            ($RelativePath -split '[\\/]')[0] -notin $ExcludedDirectories
-        }
-    foreach ($File in $Files)
-    {
-        $Content = Get-Content -Path $File.FullName -Raw -ErrorAction 'SilentlyContinue'
-        if ($null -eq $Content)
-        {
-            continue
-        }
-        if ($Content -notmatch $ReferencePattern)
-        {
-            continue
-        }
-        $Updated = [regex]::Replace($Content, $ReferencePattern, "Brownserve-UK/actions/`$1@$script:PrefixedVersion")
-        if ($Updated -ne $Content)
-        {
-            Set-Content -Path $File.FullName -Value $Updated -NoNewline
-            $script:TrackedFiles += ($File.FullName | Convert-Path)
-            Write-Verbose "Updated references in $($File.FullName)"
-        }
-    }
-}
-
-<#
-.SYNOPSIS
     Creates a new changelog entry for the upcoming release.
 #>
 task CreateChangelogEntry SetVersion, {
@@ -298,9 +259,9 @@ task CreateStagingBranch SetVersion, {
 
 <#
 .SYNOPSIS
-    Commits tracked file changes (CHANGELOG.md and any files with updated internal references) to the staging branch.
+    Commits the updated CHANGELOG.md to the staging branch.
 #>
-task CommitTrackedChanges UpdateChangelog, UpdateActionReferences, CreateStagingBranch, {
+task CommitTrackedChanges UpdateChangelog, CreateStagingBranch, {
     if ($script:TrackedFiles.Count -gt 0)
     {
         Write-Build White 'Committing tracked changes'
@@ -365,7 +326,7 @@ Please review the changes and merge if they look good.
 
 <#
 .SYNOPSIS
-    Runs actionlint against every workflow and composite action in the repository.
+    Runs actionlint against every workflow in the repository.
 #>
 task Lint {
     Write-Build White 'Running actionlint'
@@ -383,7 +344,7 @@ task Lint {
 
 <#
 .SYNOPSIS
-    Runs the linter that checks every action.yml and workflow in the repository.
+    Runs the linter that checks every workflow in the repository.
 #>
 task Build Lint, {}
 
@@ -452,7 +413,7 @@ task PublishRelease GetReleaseHistory, {
 
 <#
 .SYNOPSIS
-    Stages a release by updating the changelog, bumping internal action/workflow references and creating a pull request.
+    Stages a release by updating the changelog and creating a pull request.
     This is the first step in a two-stage release process.
 #>
 task StageRelease CheckStagingParameters, SetStagingVariables, CreatePullRequest, {

@@ -206,6 +206,21 @@ catch
 # Place any custom code below, this will be preserved whenever you update your _init script (DO NOT REMOVE THIS SECTION)
 ### Start user defined _init steps
 
+try
+{
+    Write-Verbose 'Downloading powershell-yaml module'
+    Save-Module 'powershell-yaml' -Repository PSGallery -Path $Global:BrownserveRepoNugetPackagesDirectory -ErrorAction 'stop'
+    $Global:BrownserveRepoPowerShellYAMLPath = Get-ChildItem (Join-Path $Global:BrownserveRepoNugetPackagesDirectory -ChildPath 'powershell-yaml') -Filter 'powershell-yaml.psd1' -Recurse
+    if (!$Global:BrownserveRepoPowerShellYAMLPath)
+    {
+        throw 'Failed to find powershell-yaml module after download'
+    }
+}
+catch
+{
+    throw "Failed to download the powershell-yaml module.`n$($_.Exception.Message)"
+}
+
 $ActionlintVersion = '1.7.12'
 
 $ActionlintChecksums = @{

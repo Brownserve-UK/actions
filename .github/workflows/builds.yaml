@@ -23,7 +23,7 @@ jobs:
           FILES=$(gh pr view ${{ github.event.pull_request.number }} \
             --repo ${{ github.repository }} \
             --json files --jq '.files[].path')
-          if echo "$FILES" | grep -iqE '^(setup-toolchains/|run-build/|detect-changes/|notify/|\.github/workflows/|\.build/|\.config/|nuget\.config$)'; then
+          if echo "$FILES" | grep -iqE '^(\.github/workflows/|\.build/|\.config/|nuget\.config$)'; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
             echo "No relevant files changed, skipping build"

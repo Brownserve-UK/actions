@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: '3.x'
       # Step 3: Install MkDocs and build/deploy the site
-      - name: deploy-docs
+      - name: deploy-mkdocs-site
         run: |
           pip install -r requirements.txt
           mkdocs gh-deploy --force
@@ -51,7 +51,7 @@ jobs:
         with:
           fetch-depth: 0
       # Step 2: Install Node.js (Astro requires 22.12 or newer)
-      - name: setup-node
+      - name: setup-node-astro
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '22'
@@ -62,7 +62,7 @@ jobs:
           npm install --no-audit --no-fund
           npm run build
       # Step 4: Push the built site to the gh-pages branch
-      - name: deploy-docs
+      - name: deploy-astro-site
         working-directory: ${{ inputs.docs-path }}/dist
         env:
           GITHUB_TOKEN: ${{ github.token }}

@@ -47,12 +47,22 @@ jobs:
     steps:
       - name: check-relevant-changes
         id: filter
-        uses: Brownserve-UK/actions/detect-changes@v0.1.0
-        with:
-          pattern: ${{ inputs.change-pattern }}
-          pr-number: ${{ github.event.pull_request.number }}
-          repository: ${{ github.repository }}
-          github-token: ${{ github.token }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_PR_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_REPOSITORY: ${{ github.repository }}
+          INPUT_PATTERN: ${{ inputs.change-pattern }}
+        run: |
+          FILES=$(gh pr view "$INPUT_PR_NUMBER" \
+            --repo "$INPUT_REPOSITORY" \
+            --json files --jq '.files[].path')
+          if echo "$FILES" | grep -iqE "$INPUT_PATTERN"; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No relevant files changed, skipping build"
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
 
   build:
     needs: check-changes
@@ -65,19 +75,66 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Step 1: Install any toolchains the build needs
-      - name: setup-toolchains
-        uses: Brownserve-UK/actions/setup-toolchains@v0.1.0
+      # Step 1: Install Rust
+      - name: install-rust
+        if: inputs.rust
+        shell: bash
+        run: rustup toolchain install stable --profile minimal
+      # Step 2: Install Node.js
+      - name: setup-node
+        if: inputs.node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          rust: ${{ inputs.rust }}
-          node: ${{ inputs.node }}
-          mono: ${{ inputs.mono }}
-      # Step 2: Checkout the repo and run the build script
-      - name: run-build
-        uses: Brownserve-UK/actions/run-build@v0.1.0
+          node-version: '22'
+      # Step 3: Install Mono (required to run NuGet.exe on Linux)
+      - name: install-mono
+        if: inputs.mono
+        shell: bash
+        run: sudo apt-get install -y mono-complete
+      # Step 4: Checkout the repo
+      - name: checkout-repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          repo-name: ${{ inputs.repo-name }}
-          build: ${{ inputs.build-task }}
+          path: ${{ inputs.repo-name }}
+      # Step 5: Run the build script
+      - name: run-build-script
+        shell: pwsh
+        env:
+          INPUT_REPO_NAME: ${{ inputs.repo-name }}
+          INPUT_BRANCH_NAME: ${{ github.ref }}
+          INPUT_BUILD: ${{ inputs.build-task }}
+        run: |
+          $Params = @{
+            GitHubRepoName = $env:INPUT_REPO_NAME
+            BranchName = $env:INPUT_BRANCH_NAME
+            Build = $env:INPUT_BUILD
+            Verbose = $true
+          }
+          $OptionalParams = [ordered]@{
+            ReleaseType = $env:INPUT_RELEASE_TYPE
+            GitHubRepoOwner = $env:INPUT_GITHUB_REPO_OWNER
+            GitHubStageReleaseToken = $env:INPUT_GITHUB_STAGE_RELEASE_TOKEN
+            GitHubReleaseToken = $env:INPUT_GITHUB_RELEASE_TOKEN
+            NugetFeedApiKey = $env:INPUT_NUGET_FEED_API_KEY
+            PSGalleryAPIKey = $env:INPUT_PSGALLERY_API_KEY
+            DockerHubUsername = $env:INPUT_DOCKERHUB_USERNAME
+            DockerHubToken = $env:INPUT_DOCKERHUB_TOKEN
+            GHCRToken = $env:INPUT_GHCR_TOKEN
+            Target = $env:INPUT_TARGET
+            ArchiveSourceDirectory = $env:INPUT_ARCHIVE_SOURCE_DIRECTORY
+          }
+          foreach ($Param in $OptionalParams.GetEnumerator())
+          {
+            if ($Param.Value)
+            {
+              $Params.Add($Param.Key, $Param.Value)
+            }
+          }
+          if ($env:INPUT_PUBLISH_TO)
+          {
+            $Params.Add('PublishTo', @($env:INPUT_PUBLISH_TO -split ',' | ForEach-Object { $_.Trim().Trim('"', "'") } | Where-Object { $_ }))
+          }
+          & "./$($env:INPUT_REPO_NAME)/.build/build.ps1" @Params
 
   # Gate job: always runs (even when 'build' was skipped) and reports the single status check name that
   # branch protection requires. This keeps the required-check name stable whether or not relevant changes

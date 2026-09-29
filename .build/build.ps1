@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds and releases this repository's shared composite actions and reusable workflows via Invoke-Build.
+    Builds and releases this repository's shared reusable workflows via Invoke-Build.
 #>
 [CmdletBinding()]
 param
